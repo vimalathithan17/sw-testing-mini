@@ -1,0 +1,53 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+.tox/
+
+# SQLite databases
+*.db
+*.sqlite3
+app.db
+
+# Logs and runtime artifacts
+*.log
+logs/
+
+# Locust outputs
+locust_stats.csv
+locust_stats_history.csv
+locust_distribution.csv
+locust_failures.csv
+
+# Editor/OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Type checkers/linters
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
