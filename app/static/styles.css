@@ -1,0 +1,5 @@
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 1.5rem; }
+header { margin-bottom: 1rem; }
+form { margin: 0.5rem 0; }
+input { margin-right: 0.5rem; }
+.error { color: #b00020; }
