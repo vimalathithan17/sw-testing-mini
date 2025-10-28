@@ -1,62 +1,108 @@
 {% extends 'base.html' %}
 {% block content %}
-<section>
-  <h2>Create User</h2>
-  <form method="post" action="/ui/users">
-    <input name="name" placeholder="Name" required>
-    <input name="email" placeholder="Email (optional)">
-    <button type="submit">Create</button>
-  </form>
-</section>
+<div class="grid">
+  <div class="card">
+    <h3 class="small">Create User</h3>
+    <form method="post" action="/ui/users">
+      <input name="name" placeholder="Name" required>
+      <input name="email" placeholder="Email (optional)">
+      <button type="submit">Create</button>
+    </form>
 
-<section>
-  <h2>Create Order</h2>
-  <form method="post" action="/ui/orders">
-    <input name="user_id" type="number" placeholder="User ID" required>
-    <input name="amount" type="number" step="0.01" placeholder="Amount" required>
-    <button type="submit">Create</button>
-  </form>
-  {% if error %}
-    <p class="error">{{ error }}</p>
-  {% endif %}
-</section>
+    <h3 class="small">Create Order</h3>
+    <form method="post" action="/ui/orders">
+      <input name="user_id" type="number" placeholder="User ID" required>
+      <input name="amount" type="number" step="0.01" placeholder="Amount" required>
+      <button type="submit">Create</button>
+    </form>
+    {% if error %}
+      <p class="error">{{ error }}</p>
+    {% endif %}
+  </div>
 
-<section>
-  <h2>Search Users</h2>
-  <form method="get" action="/ui">
-    <input name="q" value="{{ q or '' }}" placeholder="Search name">
-    <button type="submit">Search</button>
-  </form>
-  {% if search_results is not none %}
-    <ul>
-      {% for u in search_results %}
+  <div class="card">
+    <h3 class="small">Search Users</h3>
+    <form method="get" action="/ui">
+      <input name="q" value="{{ q or '' }}" placeholder="Search name">
+      <button type="submit">Search</button>
+    </form>
+    {% if search_results is not none %}
+      <ul class="users-list">
+        {% for u in search_results %}
+          <li>{{ u.id }} - {{ u.name }} ({{ u.email or 'no email' }})</li>
+        {% else %}
+          <li>No results</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <hr>
+    <h3 class="small">Vulnerability Mode</h3>
+    <div class="vuln-controls">
+      <div id="vuln-status">Current: {{ vulnerable }}</div>
+      <div class="vuln-badge {{ 'vuln-true' if vulnerable else 'vuln-false' }}">{{ 'VULNERABLE' if vulnerable else 'SAFE' }}</div>
+    </div>
+    <div style="margin-top:0.5rem">
+      <button id="enable-vuln">Enable</button>
+      <button id="disable-vuln" class="secondary">Disable</button>
+      <span id="vuln-spinner" style="display:none;margin-left:0.5rem" aria-hidden="true"><span class="spinner"></span></span>
+    </div>
+
+    <script>
+      async function setVulnerable(value) {
+        const spinner = document.getElementById('vuln-spinner');
+        spinner.style.display = 'inline-block';
+        try {
+          const res = await fetch('/vulnerable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: value })
+          });
+          if (!res.ok) throw new Error('Network response was not ok')
+          const data = await res.json();
+          document.getElementById('vuln-status').textContent = 'Current: ' + data.vulnerable;
+          const badge = document.querySelector('.vuln-badge');
+          if (data.vulnerable) {
+            badge.classList.remove('vuln-false'); badge.classList.add('vuln-true'); badge.textContent = 'VULNERABLE';
+          } else {
+            badge.classList.remove('vuln-true'); badge.classList.add('vuln-false'); badge.textContent = 'SAFE';
+          }
+        } catch (err) {
+          console.error('Failed to set vulnerable flag', err);
+          alert('Failed to set vulnerability flag: ' + err.message);
+        } finally {
+          spinner.style.display = 'none';
+        }
+      }
+
+      document.getElementById('enable-vuln').addEventListener('click', function (e) { e.preventDefault(); setVulnerable(true); });
+      document.getElementById('disable-vuln').addEventListener('click', function (e) { e.preventDefault(); setVulnerable(false); });
+    </script>
+
+  </div>
+</div>
+
+<div class="grid" style="margin-top:1rem">
+  <div class="card">
+    <h3 class="small">Users</h3>
+    <ul class="users-list">
+      {% for u in users %}
         <li>{{ u.id }} - {{ u.name }} ({{ u.email or 'no email' }})</li>
       {% else %}
-        <li>No results</li>
+        <li>No users</li>
       {% endfor %}
     </ul>
-  {% endif %}
-</section>
+  </div>
 
-<section>
-  <h2>Users</h2>
-  <ul>
-    {% for u in users %}
-      <li>{{ u.id }} - {{ u.name }} ({{ u.email or 'no email' }})</li>
-    {% else %}
-      <li>No users</li>
-    {% endfor %}
-  </ul>
-</section>
-
-<section>
-  <h2>Orders</h2>
-  <ul>
-    {% for o in orders %}
-      <li>#{{ o.id }} user {{ o.user_id }}: {{ o.amount }}</li>
-    {% else %}
-      <li>No orders</li>
-    {% endfor %}
-  </ul>
-</section>
+  <div class="card">
+    <h3 class="small">Orders</h3>
+    <ul class="orders-list">
+      {% for o in orders %}
+        <li>#{{ o.id }} user {{ o.user_id }}: {{ o.amount }}</li>
+      {% else %}
+        <li>No orders</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
 {% endblock %}

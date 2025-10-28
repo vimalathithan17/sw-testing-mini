@@ -9,3 +9,11 @@ locust==2.31.6
 jinja2==3.1.4
 python-multipart==0.0.12
 selenium==4.25.0
+
+# Dev / test helpers
+pytest-cov==4.1.0
+pytest-asyncio==0.22.0
+pytest-mock==3.11.3
+black==23.9.1
+flake8==6.0.0
+python-dotenv==1.0.0

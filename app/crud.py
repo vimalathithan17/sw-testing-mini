@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from typing import List
 
 from . import models, schemas
+from . import config
 
 # Business rule: amount stored rounded to 2 decimals, non-negative
 
@@ -24,10 +25,13 @@ def list_users(db: Session) -> List[models.User]:
 
 
 def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
-    # Optional explicit user existence check for nicer error
-    user = db.get(models.User, order.user_id)
-    if not user:
-        raise ValueError("foreign key violation: user does not exist")
+    # Optional explicit user existence check for nicer error. In vulnerable mode
+    # we skip this defensive check to simulate a vulnerable implementation
+    # that relies solely on DB constraints.
+    if not config.is_vulnerable():
+        user = db.get(models.User, order.user_id)
+        if not user:
+            raise ValueError("foreign key violation: user does not exist")
 
     amount = round_amount(order.amount)
     if amount < 0:
@@ -39,6 +43,9 @@ def create_order(db: Session, order: schemas.OrderCreate) -> models.Order:
         db.commit()
     except IntegrityError as e:
             db.rollback()
+            # In vulnerable mode this will surface as a DB integrity error; we
+            # keep the same API-level ValueError but the message differs and
+            # tests can detect the difference.
             raise ValueError("integrity error") from e
     db.refresh(db_order)
     return db_order

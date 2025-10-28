@@ -6,11 +6,18 @@ from sqlalchemy.orm import Session
 from typing import List
 from .db import Base, engine, SessionLocal
 from . import crud, models, schemas
+from . import config
+from sqlalchemy import text
+import os
 
 # Create tables if not existing (for demo). In production, use Alembic.
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SW Testing Mini App")
+
+# Initialize runtime vulnerable flag from environment (can be toggled at runtime)
+env_vuln = os.getenv("VULNERABLE", "0")
+config.set_vulnerable(env_vuln in ("1", "true", "True"))
 
 # UI setup
 templates = Jinja2Templates(directory="app/templates")
@@ -58,6 +65,75 @@ async def search_users(q: str = Query("", min_length=0, max_length=100), db: Ses
     results = db.query(models.User).filter(models.User.name.like(f"%{q}%")).all()
     return results
 
+
+@app.get("/search_vuln", response_model=List[schemas.UserRead])
+async def search_users_vuln(q: str = Query("", min_length=0, max_length=200), db: Session = Depends(get_db)):
+    """A toggleable endpoint that demonstrates vulnerable vs safe search.
+
+    - If `config.is_vulnerable()` is True, we run a raw SQL query built with f-strings
+      (intentionally vulnerable to SQL injection for testing).
+    - If False, we use a ORM/parameterized query.
+    """
+    if not q:
+        return []
+    if config.is_vulnerable():
+        # Vulnerable: build SQL with direct interpolation (DO NOT DO THIS IN REAL APPS)
+        sql = f"SELECT id, name, email FROM users WHERE name = '{q}'"
+        rows = db.execute(text(sql)).all()
+        # Map rows to UserRead-like dicts
+        results = []
+        for r in rows:
+            results.append(models.User(id=r[0], name=r[1], email=r[2]))
+        return results
+    else:
+        # Safe: parameterized ORM filter for exact match
+        return db.query(models.User).filter(models.User.name == q).all()
+
+
+@app.get("/vulnerable")
+async def get_vulnerable():
+    return {"vulnerable": config.is_vulnerable()}
+
+
+@app.post("/vulnerable")
+async def set_vulnerable_endpoint(request: Request):
+    """Set the runtime vulnerable flag. Accepts value via query, form, or JSON body.
+
+    This flexible input handling lets the same endpoint be used by tests
+    (query param), by UI forms (form data), and by programmatic clients (JSON).
+    """
+    # Try query param first
+    value = request.query_params.get("value")
+    # Then form data
+    if value is None:
+        try:
+            form = await request.form()
+            value = form.get("value")
+        except Exception:
+            value = None
+
+    # Then JSON body
+    if value is None:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                value = body.get("value")
+        except Exception:
+            pass
+
+    # Parse boolean-ish values
+    val = False
+    if isinstance(value, str):
+        val = value.lower() in ("1", "true", "yes", "on")
+    elif isinstance(value, bool):
+        val = value
+    elif value is not None:
+        # Fallback: truthy conversion
+        val = bool(value)
+
+    config.set_vulnerable(val)
+    return {"vulnerable": config.is_vulnerable()}
+
 # -------------------- UI Views --------------------
 @app.get("/ui", response_class=HTMLResponse)
 async def ui_index(request: Request, q: str = "", db: Session = Depends(get_db)):
@@ -68,7 +144,15 @@ async def ui_index(request: Request, q: str = "", db: Session = Depends(get_db))
         search_results = db.query(models.User).filter(models.User.name.like(f"%{q}%")).all()
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "users": users, "orders": orders, "q": q, "search_results": search_results, "error": None},
+            {
+                "request": request,
+                "users": users,
+                "orders": orders,
+                "q": q,
+                "search_results": search_results,
+                "error": None,
+                "vulnerable": config.is_vulnerable(),
+            },
     )
 
 @app.post("/ui/users")
