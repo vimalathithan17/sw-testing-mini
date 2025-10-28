@@ -9,6 +9,10 @@ class User(Base):
     name = Column(String, nullable=False, index=True)
     # Added in V2 via migration; defined here but migration handles existing DBs
     email = Column(String, nullable=True, unique=False, index=True)
+    # role column for simple RBAC: 'user' or 'admin'
+    role = Column(String, nullable=False, default='user', index=True)
+    # password hash (bcrypt). Nullable for legacy users created without password
+    password_hash = Column(String, nullable=True)
 
     orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
 

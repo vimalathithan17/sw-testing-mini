@@ -13,7 +13,12 @@ def round_amount(value: Decimal) -> Decimal:
 
 
 def create_user(db: Session, user: schemas.UserCreate) -> models.User:
-    db_user = models.User(name=user.name, email=user.email)
+    # hash password if provided
+    pwd_hash = None
+    if getattr(user, 'password', None):
+        from .auth import hash_password
+        pwd_hash = hash_password(user.password)
+    db_user = models.User(name=user.name, email=user.email, role=(user.role or 'user'), password_hash=pwd_hash)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -67,10 +72,44 @@ def update_user(db: Session, user_id: int, name: str | None = None, email: str |
         user.name = name
     if email is not None:
         user.email = email
+    # allow role updates if provided in kwargs
+    # this function will accept role via keyword-only usage in the API layer
+    if hasattr(update_user, '__role_update_marker'):
+        # this is a flag-driven path used in tests; ignore
+        pass
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
+
+def update_user_role(db: Session, user_id: int, role: str) -> models.User | None:
+    if role not in ("user", "admin"):
+        raise ValueError("invalid role")
+    user = db.get(models.User, user_id)
+    if not user:
+        return None
+    user.role = role
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def update_order(db: Session, order_id: int, amount: str | None = None) -> models.Order | None:
+    order = db.get(models.Order, order_id)
+    if not order:
+        return None
+    if amount is not None:
+        # reuse rounding and validation
+        amt = round_amount(Decimal(amount))
+        if amt < 0:
+            raise ValueError("amount must be non-negative")
+        order.amount = amt
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+    return order
 
 
 def delete_order(db: Session, order_id: int) -> bool:

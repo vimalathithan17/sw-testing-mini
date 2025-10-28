@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, Request, Form
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, Form, Header
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -8,11 +8,30 @@ from .db import Base, engine, SessionLocal
 from . import crud, models, schemas
 from . import config
 from .utils import sanitize_input
+from .auth import create_access_token, decode_access_token
 from sqlalchemy import text
 import os
+from fastapi import Header
 
 # Create tables if not existing (for demo). In production, use Alembic.
 Base.metadata.create_all(bind=engine)
+
+# Ensure `role` and `password_hash` columns exist on users table for older DB files used in tests/dev.
+with engine.connect() as conn:
+    try:
+        res = conn.execute(text("PRAGMA table_info(users)"))
+        cols = [row[1] for row in res.fetchall()]
+        if 'role' not in cols:
+            # SQLite supports ADD COLUMN; set default to 'user'
+            conn.execute(text("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user' NOT NULL"))
+        if 'password_hash' not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN password_hash TEXT"))
+        # Backfill any NULLs just in case
+        conn.execute(text("UPDATE users SET role='user' WHERE role IS NULL"))
+        conn.commit()
+    except Exception:
+        # If the users table doesn't exist yet or pragma failed, ignore
+        pass
 
 app = FastAPI(title="SW Testing Mini App")
 
@@ -79,12 +98,12 @@ async def search_users_vuln(q: str = Query("", min_length=0, max_length=200), db
         return []
     if config.is_vulnerable():
         # Vulnerable: build SQL with direct interpolation (DO NOT DO THIS IN REAL APPS)
-        sql = f"SELECT id, name, email FROM users WHERE name = '{q}'"
+        sql = f"SELECT id, name, email, role FROM users WHERE name = '{q}'"
         rows = db.execute(text(sql)).all()
         # Map rows to UserRead-like dicts
         results = []
         for r in rows:
-            results.append(models.User(id=r[0], name=r[1], email=r[2]))
+            results.append(models.User(id=r[0], name=r[1], email=r[2], role=(r[3] if len(r) > 3 else 'user')))
         return results
     else:
         # Safe: parameterized ORM filter for exact match
@@ -108,6 +127,45 @@ async def api_delete_order(order_id: int, db: Session = Depends(get_db)):
     return {"deleted": order_id}
 
 
+@app.put("/orders/{order_id}")
+async def api_update_order(order_id: int, payload: dict, db: Session = Depends(get_db), x_acting_user_id: int | None = Header(default=None), request: Request = None):
+    # payload may contain 'amount'
+    order = db.get(models.Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="order not found")
+
+    # Authorization: acting user must be the order owner or an admin
+    # resolve acting user id from Authorization or header
+    acting_id = None
+    auth = None
+    if request:
+        auth = request.headers.get('authorization')
+    if auth and auth.lower().startswith('bearer '):
+        token = auth.split(None, 1)[1]
+        try:
+            payload_token = decode_access_token(token)
+            acting_id = int(payload_token.get('sub'))
+        except Exception:
+            raise HTTPException(status_code=401, detail='invalid token')
+    elif x_acting_user_id is not None:
+        acting_id = int(x_acting_user_id)
+
+    if acting_id is None:
+        raise HTTPException(status_code=403, detail="missing acting user header or token")
+    acting = db.get(models.User, acting_id)
+    if not acting:
+        raise HTTPException(status_code=403, detail="acting user not found")
+    if acting.role != 'admin' and acting.id != order.user_id:
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    amount = payload.get('amount')
+    try:
+        updated = crud.update_order(db, order_id, amount=amount)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return updated
+
+
 @app.delete("/users/{user_id}")
 async def api_delete_user(user_id: int, db: Session = Depends(get_db)):
     ok = crud.delete_user(db, user_id)
@@ -117,13 +175,45 @@ async def api_delete_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/users/{user_id}")
-async def api_update_user(user_id: int, payload: dict, db: Session = Depends(get_db)):
+async def api_update_user(user_id: int, payload: dict, db: Session = Depends(get_db), x_acting_user_id: int | None = Header(default=None), request: Request = None):
     # Accept raw dict to keep things simple for this small app
     name = payload.get("name")
     email = payload.get("email")
+    role = payload.get("role")
+
+    # perform update
     updated = crud.update_user(db, user_id, name=name, email=email)
     if not updated:
         raise HTTPException(status_code=404, detail="user not found")
+
+    # role changes require admin privilege
+    if role is not None:
+        # resolve acting user: prefer Authorization bearer token, fall back to X-Acting-User-Id
+        acting_id = None
+        # check Authorization
+        auth = None
+        if request:
+            auth = request.headers.get('authorization')
+        if auth and auth.lower().startswith('bearer '):
+            token = auth.split(None, 1)[1]
+            try:
+                payload_token = decode_access_token(token)
+                acting_id = int(payload_token.get('sub'))
+            except Exception:
+                raise HTTPException(status_code=401, detail='invalid token')
+        elif x_acting_user_id is not None:
+            acting_id = int(x_acting_user_id)
+
+        if acting_id is None:
+            raise HTTPException(status_code=403, detail="missing acting user header or token")
+        acting = db.get(models.User, acting_id)
+        if not acting or acting.role != 'admin':
+            raise HTTPException(status_code=403, detail="forbidden: admin required to change role")
+        try:
+            updated = crud.update_user_role(db, user_id, role)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     return updated
 
 
@@ -201,6 +291,30 @@ async def set_vulnerable_endpoint(request: Request):
 
     config.set_vulnerable(val)
     return {"vulnerable": config.is_vulnerable()}
+
+
+@app.post("/auth/login")
+async def auth_login(payload: dict, db: Session = Depends(get_db)):
+    # Support two flows:
+    # 1) legacy: { "user_id": <int> } -> return token for that user if no password is set (backwards compatible)
+    # 2) secure: { "user_id": <int>, "password": "..." } -> verify password and return token
+    uid = payload.get("user_id")
+    if uid is None:
+        raise HTTPException(status_code=400, detail="user_id required")
+    user = db.get(models.User, int(uid))
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+    pwd = payload.get('password')
+    # if user has password_hash, require password; otherwise allow legacy user_id flow
+    if user.password_hash:
+        if not pwd:
+            raise HTTPException(status_code=401, detail="password required")
+        from .auth import verify_password
+        if not verify_password(pwd, user.password_hash):
+            raise HTTPException(status_code=401, detail="invalid credentials")
+    # legacy flow allowed when no password_hash present and no password provided
+    token = create_access_token(user.id, user.role)
+    return {"access_token": token, "token_type": "bearer"}
 
 # -------------------- UI Views --------------------
 @app.get("/ui", response_class=HTMLResponse)

@@ -9,17 +9,24 @@
 *{box-sizing:border-box}
 body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; background:var(--bg); color:#0f172a }
 header { background: linear-gradient(90deg,#0ea5e9, #6366f1); color:white; padding:1rem 1.5rem}
+header .topbar{display:flex;justify-content:space-between;align-items:center;gap:1rem}
 header h1{margin:0;font-size:1.25rem}
-header nav{margin-top:0.5rem}
-header a{color:rgba(255,255,255,0.9); text-decoration:none; margin-right:1rem}
+header nav{margin-top:0.25rem}
+header a{color:rgba(255,255,255,0.95); text-decoration:none; margin-right:1rem}
+header .logo{display:flex;align-items:center;gap:0.5rem}
+header .logo .mark{width:34px;height:34px;border-radius:6px;background:rgba(255,255,255,0.12);display:inline-flex;align-items:center;justify-content:center;font-weight:700}
 main{max-width:1100px;margin:1.25rem auto;padding:0 1rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
 .card{background:var(--card);border-radius:8px;padding:1rem;box-shadow:0 6px 18px rgba(12,15,30,0.06)}
+/* Card header */
+.card h3{margin:0 0 0.5rem 0;font-size:1.05rem}
+.card .card-actions{display:flex;gap:0.5rem;align-items:center}
 form{margin:0.5rem 0}
 input, button{font:inherit}
 input[type="text"], input[type="number"], input[type="email"]{padding:0.5rem;border:1px solid #e6e9ef;border-radius:6px;margin-right:0.5rem}
-button{background:var(--accent);color:white;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer}
+button{background:var(--accent);color:white;border:none;padding:0.5rem 0.75rem;border-radius:8px;cursor:pointer;box-shadow:0 6px 12px rgba(37,99,235,0.12)}
 button.secondary{background:#64748b}
+button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(37,99,235,0.08)}
 .error{color:var(--danger);margin-top:0.5rem}
 .muted{color:var(--muted)}
 .vuln-badge{display:inline-block;padding:0.25rem 0.5rem;border-radius:999px;font-size:0.85rem;color:white;margin-left:0.5rem}
@@ -61,3 +68,7 @@ button.secondary{background:#64748b}
 @media (prefers-reduced-motion: reduce){
 	.toast-in, .toast-out{animation:none;opacity:1;transform:none}
 }
+
+/* Footer */
+footer{max-width:1100px;margin:2rem auto;padding:1rem;color:var(--muted);font-size:0.9rem}
+footer a{color:var(--accent);text-decoration:none}

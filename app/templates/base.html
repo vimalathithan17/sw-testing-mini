@@ -8,10 +8,20 @@
 </head>
 <body>
   <header>
-    <h1>SW Testing Mini</h1>
-    <nav>
-      <a href="/ui">Home</a>
-    </nav>
+    <div class="topbar">
+      <div class="logo"><div class="mark">ST</div><h1>SW Testing Mini</h1></div>
+      <div class="acting">
+        <label for="login-user-id" style="color:rgba(255,255,255,0.9);font-size:0.9rem;margin-right:0.5rem">Login as</label>
+        <input id="login-user-id" placeholder="user id" style="width:5rem;padding:0.25rem;border-radius:6px;border:none;margin-right:0.25rem"/>
+        <input id="login-password" placeholder="password" type="password" style="width:8rem;padding:0.25rem;border-radius:6px;border:none;margin-right:0.25rem"/>
+        <button id="login-btn" class="ghost" style="margin-left:0.25rem">Login</button>
+        <button id="logout-btn" class="ghost" style="margin-left:0.25rem">Logout</button>
+      </div>
+      <nav>
+        <a href="/ui">Home</a>
+        <a href="/ui">Dashboard</a>
+      </nav>
+    </div>
   </header>
   <main>
     <div class="container">
@@ -86,6 +96,44 @@
         console.warn('Failed to parse toast payload', e);
       }
     });
+    // acting user UI: persist to localStorage and expose a getter for other scripts
+    (function(){
+      const input = document.getElementById('acting-user-id');
+      const btn = document.getElementById('acting-set');
+      if(!input || !btn) return;
+      const key = 'actingUserId';
+      input.value = localStorage.getItem(key) || '';
+      btn.addEventListener('click', ()=>{
+        const v = input.value.trim();
+        if(v) localStorage.setItem(key, v); else localStorage.removeItem(key);
+        alert('Acting user id set to: ' + (v || '(none)'));
+      });
+      window.getActingUserId = function(){ return localStorage.getItem(key); };
+    })();
+    // Login form handling: request token from /auth/login and store in localStorage
+    (function(){
+      const idInput = document.getElementById('login-user-id');
+      const pwInput = document.getElementById('login-password');
+      const loginBtn = document.getElementById('login-btn');
+      const logoutBtn = document.getElementById('logout-btn');
+      const key = 'authToken';
+      function setToken(t){ if(t) localStorage.setItem(key, t); else localStorage.removeItem(key); }
+      loginBtn && loginBtn.addEventListener('click', async ()=>{
+        const uid = idInput.value.trim(); const pw = pwInput.value;
+        if(!uid){ alert('enter user id'); return; }
+        try{
+          const res = await fetch('/auth/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id: uid, password: pw || undefined})});
+          if(!res.ok){ const j = await res.json().catch(()=>({})); alert('login failed: '+(j.detail||res.statusText)); return; }
+          const j = await res.json(); setToken(j.access_token); alert('logged in');
+        }catch(e){ alert('login failed'); }
+      });
+      logoutBtn && logoutBtn.addEventListener('click', ()=>{ setToken(null); alert('logged out'); });
+      window.getAuthToken = function(){ return localStorage.getItem(key); };
+      window.getAuthHeader = function(){ const t = window.getAuthToken(); return t ? {'Authorization':'Bearer '+t} : {}; };
+    })();
   </script>
+  <footer>
+    Built for testing examples · Toggle vulnerability mode on the UI to explore safe vs vulnerable behavior. See README for test snippets.
+  </footer>
 </body>
 </html>

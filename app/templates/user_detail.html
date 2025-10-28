@@ -3,6 +3,7 @@
 <div class="card" style="max-width:720px;margin:1rem auto">
   <h2>{{ user.name }} <span class="small muted">(id: {{ user.id }})</span></h2>
   <p class="small">Email: <span id="user-email"></span>{{ user.email or 'no email' }}</span></p>
+  <p class="small">Role: <strong>{{ user.role }}</strong></p>
   <p class="small">Name: <span id="user-name">{{ user.name }}</span></p>
   <div style="margin-top:0.5rem">
     <button id="edit-user">Edit user</button>
@@ -17,7 +18,10 @@
   <h3 class="small">Orders</h3>
   <ul class="orders-list">
     {% for o in user.orders %}
-      <li data-order-id="{{ o.id }}">#{{ o.id }} amount {{ o.amount }} <button class="delete-order" data-id="{{ o.id }}">Delete</button></li>
+      <li data-order-id="{{ o.id }}">#{{ o.id }} amount <span class="order-amt" data-amt="{{ o.amount }}">{{ o.amount }}</span>
+        <button class="edit-order" data-id="{{ o.id }}">Edit</button>
+        <button class="delete-order" data-id="{{ o.id }}">Delete</button>
+      </li>
     {% else %}
       <li>No orders</li>
     {% endfor %}
@@ -102,6 +106,48 @@
       editBtn.style.display = '';
       saveBtn.style.display = 'none';
       cancelBtn.style.display = 'none';
+    });
+  </script>
+  <script>
+    // inline order edit handlers
+    document.addEventListener('click', async function(e){
+      if(e.target.matches('.edit-order')){
+        const id = e.target.dataset.id;
+        const li = document.querySelector('[data-order-id="'+id+'"]');
+        const span = li.querySelector('.order-amt');
+        const cur = span.getAttribute('data-amt');
+        // replace with input and save/cancel
+        const input = document.createElement('input'); input.type='number'; input.step='0.01'; input.value = cur;
+        const save = document.createElement('button'); save.textContent='Save'; save.className='ghost';
+        const cancel = document.createElement('button'); cancel.textContent='Cancel'; cancel.className='secondary';
+        // replace span contents
+        span.style.display='none';
+        e.target.style.display='none';
+        li.insertBefore(input, span.nextSibling);
+        li.insertBefore(save, input.nextSibling);
+        li.insertBefore(cancel, save.nextSibling);
+
+        save.addEventListener('click', async ()=>{
+          const amt = input.value;
+          // prefer Authorization bearer token from UI login form
+          const headers = {'Content-Type':'application/json'};
+          if (window.getAuthHeader) {
+            Object.assign(headers, window.getAuthHeader());
+          } else {
+            const acting = window.getActingUserId && window.getActingUserId();
+            if (acting) headers['X-Acting-User-Id'] = acting;
+          }
+          const res = await fetch('/orders/'+id, {method:'PUT', headers, body: JSON.stringify({amount: amt})});
+          if(!res.ok){ const j = await res.json().catch(()=>({})); alert('Failed: '+(j.detail||res.statusText)); return; }
+          const data = await res.json();
+          span.textContent = data.amount;
+          span.setAttribute('data-amt', data.amount);
+          // cleanup
+          input.remove(); save.remove(); cancel.remove(); span.style.display='inline'; e.target.style.display='inline';
+        });
+
+        cancel.addEventListener('click', ()=>{ input.remove(); save.remove(); cancel.remove(); span.style.display='inline'; e.target.style.display='inline'; });
+      }
     });
   </script>
   {# toast is handled in base.html via the toast-container data-toast attribute #}

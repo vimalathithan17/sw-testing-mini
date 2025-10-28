@@ -20,3 +20,5 @@ pytest-mock
 black
 flake8
 python-dotenv
+PyJWT>=2.0
+passlib[bcrypt]

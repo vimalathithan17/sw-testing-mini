@@ -6,11 +6,14 @@ from decimal import Decimal
 class UserCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: Optional[str] = Field(default=None)
+    role: Optional[str] = Field(default="user")
+    password: Optional[str] = Field(default=None)
 
 class UserRead(BaseModel):
     id: int
     name: str
     email: Optional[str] = None
+    role: str = "user"
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -164,6 +164,60 @@ curl 'http://localhost:8000/search_vuln?q=%27%20OR%20%271%27%3D%271'
 
 - In VULNERABLE mode the raw SQL path may return more rows (demonstrating SQL injection). Toggle back to SAFE and verify the injection payload no longer returns rows.
 
+Test payloads and what to expect
+--------------------------------
+Below are short, safe examples you can paste into the UI `Search Users` box (or pass as `q` to `/search_vuln`) to exercise common classes of input-handling issues. These are intended for local, isolated testing only.
+
+- SQL injection (search box):
+	- Payloads to try (paste into the Search box on `/ui`):
+		- `' OR '1'='1' -- `
+		- `%27%20OR%20%271%27%3D%271%27%20--` (URL-encoded equivalent)
+	- Where to input: `Search Users` text field on `/ui` or direct GET to `/search_vuln?q=<payload>`
+	- Expected (SAFE): no special effect — the app uses parameterized/ORM queries and the injection should not return all users. The UI will sanitize/normalize suspicious input and may show a toast message.
+	- Expected (VULNERABLE): the vulnerable raw-SQL path may treat the payload as SQL and return more rows (simulates classic boolean-based injection). Use this only locally to observe the difference.
+
+- Cross-site scripting (XSS) (search / user input):
+	- Payload: `<script>alert(1)</script>` or the shorter `<img src=x onerror=alert(1)>`
+	- Where to input: any text input (Create User `name`, Search box, or inline edit on user detail)
+	- Expected (SAFE): input will be sanitized (HTML tags stripped or escaped). The toast will often show that input was sanitized. No script execution should occur.
+	- Expected (VULNERABLE): in a deliberately vulnerable app you might see HTML/scripts reflected into the page and executed. This project by default applies sanitization in the UI to prevent execution; enable vulnerable mode only for local demonstrations (but note our vulnerable toggle mainly demonstrates SQL-level issues and weak server-side checks rather than full reflected-XSS injection).
+
+- Foreign-key/authorization checks (FK violation):
+	- Test: attempt to create an order for a non-existent user id (e.g., `999999`).
+	- Where to input: `Create Order` card on `/ui` (use `user_id=999999`) or call POST `/orders` with JSON `{ "user_id": 999999, "amount": "3.00" }`.
+	- Expected (SAFE): the server performs an explicit user existence check and returns a friendly 400 with a message about foreign key violation.
+	- Expected (VULNERABLE): the server skips the defensive check to simulate weaker validation; the DB constraint will reject the insert and you may see a raw integrity error bubbled up (still handled as a 400 in tests but with different message content).
+
+Quick cURL examples
+-------------------
+Use these from a shell against a locally-running server.
+
+1. Toggle vulnerable mode on:
+
+```bash
+curl -X POST 'http://localhost:8000/vulnerable' -H 'Content-Type: application/json' -d '{"value": true}'
+```
+
+2. Try a vulnerable search (URL-encoded):
+
+```bash
+curl "http://localhost:8000/search_vuln?q=%27%20OR%20%271%27%3D%271%27%20--"
+```
+
+3. Create an order for a non-existent user (FK test):
+
+```bash
+curl -X POST 'http://localhost:8000/orders' -H 'Content-Type: application/json' -d '{"user_id": 999999, "amount": "3.00"}'
+```
+
+How to interpret results
+------------------------
+- If the search payload returns many rows in VULNERABLE mode but not in SAFE mode, you have a clear reproduction of an SQL-injection-like behavior in this app's vulnerable path.
+- If the XSS payload is shown literally on the page (and not executed) the sanitizer is working. If it executes in vulnerable mode, stop testing and re-evaluate — only run that on truly isolated local systems.
+- If creating an order for a missing user shows a friendly 400 in SAFE mode but a different (DB-level) error in VULNERABLE mode, that demonstrates the difference between defensive server-side validation and relying on DB constraints alone.
+
+Responsible usage reminder: only run these tests against the local instance of this repository. Do not run these payloads against remote/third-party systems.
+
 ### Responsible security testing (safe, educational use only)
 
 - This project intentionally includes a toggleable "vulnerable" mode to demonstrate how unsafe patterns behave and how tests can detect them. Only perform vulnerability experiments in a local, isolated environment. Do NOT run attack traffic against servers you don't own or systems in production.
