@@ -26,6 +26,23 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+Default admin account (local/dev)
+--------------------------------
+
+For local development the app will seed a default admin user on startup if no admin exists. The seeded account has:
+
+- username: `admin`
+- password: `admin` (unless overridden)
+
+To override the seeded password, set the `ADMIN_PASSWORD` environment variable before starting the server. Example:
+
+```bash
+export ADMIN_PASSWORD='S3cureLocalPassword!'
+uvicorn app.main:app --reload --port 8000
+```
+
+This seeded admin account is intended only for local/dev convenience. Do not use this behavior or the default password in production.
+
 Open http://localhost:8000/docs for interactive API.
 
 ## Test suites

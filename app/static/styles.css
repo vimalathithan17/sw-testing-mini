@@ -16,6 +16,20 @@ header a{color:rgba(255,255,255,0.95); text-decoration:none; margin-right:1rem}
 header .logo{display:flex;align-items:center;gap:0.5rem}
 header .logo .mark{width:34px;height:34px;border-radius:6px;background:rgba(255,255,255,0.12);display:inline-flex;align-items:center;justify-content:center;font-weight:700}
 main{max-width:1100px;margin:1.25rem auto;padding:0 1rem}
+
+/* Auth panel styles (compact dropdown in header) */
+header .acting{position:relative}
+.auth-panel{position:absolute;right:0;top:calc(100% + 0.5rem);background:var(--card);color:var(--muted);border-radius:8px;padding:0.6rem;box-shadow:0 10px 30px rgba(12,15,30,0.12);min-width:220px;display:none}
+.auth-panel[aria-hidden="false"]{display:block}
+.auth-panel .auth-form{display:flex;flex-direction:column;gap:0.4rem}
+.auth-panel input{padding:0.4rem;border-radius:6px;border:1px solid #e6e9ef}
+.auth-panel .auth-status{font-size:0.85rem;margin-bottom:0.25rem}
+.auth-panel button.ghost{padding:0.35rem 0.5rem}
+
+@media (max-width:700px){
+	header .topbar{flex-direction:column;align-items:flex-start}
+	.auth-panel{right:1rem;left:1rem}
+}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
 .card{background:var(--card);border-radius:8px;padding:1rem;box-shadow:0 6px 18px rgba(12,15,30,0.06)}
 /* Card header */

@@ -33,6 +33,25 @@ with engine.connect() as conn:
         # If the users table doesn't exist yet or pragma failed, ignore
         pass
 
+# Ensure there is a seeded admin user for local/dev. Password comes from
+# ADMIN_PASSWORD env var or falls back to 'admin' (suitable for local/dev only).
+try:
+    from .db import SessionLocal
+    from . import crud, schemas
+    db = SessionLocal()
+    try:
+        existing = db.query(models.User).filter(models.User.role == 'admin').first()
+        if not existing:
+            admin_pw = os.getenv('ADMIN_PASSWORD', 'admin')
+            # create_user will hash the password
+            crud.create_user(db, schemas.UserCreate(name='admin', email=None, role='admin', password=admin_pw))
+            print('Seeded default admin user (name=admin) for local/dev')
+    finally:
+        db.close()
+except Exception:
+    # If anything goes wrong during startup seeding, do not crash the app.
+    pass
+
 app = FastAPI(title="SW Testing Mini App")
 
 # Initialize runtime vulnerable flag from environment (can be toggled at runtime)
@@ -295,24 +314,23 @@ async def set_vulnerable_endpoint(request: Request):
 
 @app.post("/auth/login")
 async def auth_login(payload: dict, db: Session = Depends(get_db)):
-    # Support two flows:
-    # 1) legacy: { "user_id": <int> } -> return token for that user if no password is set (backwards compatible)
-    # 2) secure: { "user_id": <int>, "password": "..." } -> verify password and return token
+    # Secure-only flow: require user_id and password. Legacy no-password
+    # login has been removed to enforce explicit authentication.
     uid = payload.get("user_id")
     if uid is None:
         raise HTTPException(status_code=400, detail="user_id required")
+    pwd = payload.get('password')
+    if not pwd:
+        raise HTTPException(status_code=401, detail="password required")
     user = db.get(models.User, int(uid))
     if not user:
         raise HTTPException(status_code=404, detail="user not found")
-    pwd = payload.get('password')
-    # if user has password_hash, require password; otherwise allow legacy user_id flow
-    if user.password_hash:
-        if not pwd:
-            raise HTTPException(status_code=401, detail="password required")
-        from .auth import verify_password
-        if not verify_password(pwd, user.password_hash):
-            raise HTTPException(status_code=401, detail="invalid credentials")
-    # legacy flow allowed when no password_hash present and no password provided
+    from .auth import verify_password
+    if not user.password_hash:
+        # If a user exists but has no password set, deny login to remove legacy flow.
+        raise HTTPException(status_code=401, detail="password required")
+    if not verify_password(pwd, user.password_hash):
+        raise HTTPException(status_code=401, detail="invalid credentials")
     token = create_access_token(user.id, user.role)
     return {"access_token": token, "token_type": "bearer"}
 
