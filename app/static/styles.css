@@ -34,3 +34,30 @@ button.secondary{background:#64748b}
 
 /* Responsive tweaks */
 @media (max-width:600px){main{padding:0.5rem}}
+
+/* Toast styles: typed toasts with fade in/out and pause-on-hover */
+#toast-container {display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;pointer-events:none}
+.toast{
+	pointer-events:auto;
+	display:flex;align-items:center;gap:0.5rem;
+	background:rgba(15,23,42,0.95);
+	color:white;padding:0.6rem 0.75rem;border-radius:8px;box-shadow:0 8px 24px rgba(12,15,30,0.12);
+	min-width:220px;max-width:360px;font-size:0.95rem;opacity:0;transform:translateY(8px);
+}
+.toast .toast-message{flex:1}
+.toast .toast-close{background:transparent;border:none;color:inherit;font-size:0.95rem;cursor:pointer;padding:0 0.25rem}
+.toast--success{background:linear-gradient(90deg, rgba(22,163,74,0.15), rgba(16,185,129,0.12));color:var(--success);border:1px solid rgba(16,185,129,0.15)}
+.toast--warn{background:linear-gradient(90deg, rgba(245,158,11,0.08), rgba(234,88,12,0.06));color:#b45309;border:1px solid rgba(245,158,11,0.12)}
+.toast--error{background:linear-gradient(90deg, rgba(220,38,38,0.06), rgba(185,28,28,0.06));color:var(--danger);border:1px solid rgba(220,38,38,0.12)}
+.toast--info{background:rgba(15,23,42,0.95);color:white}
+
+/* animations */
+.toast-in{animation:toast-in 300ms ease-out forwards}
+.toast-out{animation:toast-out 300ms ease-in forwards}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px) scale(0.995)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(8px)}}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+	.toast-in, .toast-out{animation:none;opacity:1;transform:none}
+}

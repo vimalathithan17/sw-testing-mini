@@ -29,7 +29,7 @@
     {% if search_results is not none %}
       <ul class="users-list">
         {% for u in search_results %}
-          <li>{{ u.id }} - {{ u.name }} ({{ u.email or 'no email' }})</li>
+          <li data-user-id="{{ u.id }}">{{ u.id }} - {{ u.name }} ({{ u.email or 'no email' }}) <button class="delete-user" data-id="{{ u.id }}">Delete</button></li>
         {% else %}
           <li>No results</li>
         {% endfor %}
@@ -79,15 +79,50 @@
       document.getElementById('disable-vuln').addEventListener('click', function (e) { e.preventDefault(); setVulnerable(false); });
     </script>
 
+  {# toast is now handled in base.html via the toast-container data-toast attribute #}
+
+    <script>
+      // Delete handlers for users and orders (AJAX)
+      async function deleteEntity(path, id) {
+        if (!confirm('Are you sure you want to delete #' + id + '?')) return false;
+        const res = await fetch(path, { method: 'DELETE' });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          alert('Failed to delete: ' + (j.detail || res.statusText));
+          return false;
+        }
+        return true;
+      }
+
+      document.addEventListener('click', async function (e) {
+        if (e.target.matches('.delete-user')) {
+          const id = e.target.dataset.id;
+          const ok = await deleteEntity('/users/' + id, id);
+          if (ok) {
+            const li = document.querySelector('[data-user-id="' + id + '"]');
+            if (li) li.remove();
+          }
+        }
+        if (e.target.matches('.delete-order')) {
+          const id = e.target.dataset.id;
+          const ok = await deleteEntity('/orders/' + id, id);
+          if (ok) {
+            const li = document.querySelector('[data-order-id="' + id + '"]');
+            if (li) li.remove();
+          }
+        }
+      });
+    </script>
+
   </div>
 </div>
 
 <div class="grid" style="margin-top:1rem">
   <div class="card">
     <h3 class="small">Users</h3>
-    <ul class="users-list">
-      {% for u in users %}
-        <li>{{ u.id }} - {{ u.name }} ({{ u.email or 'no email' }})</li>
+      <ul class="users-list">
+  {% for u in users %}
+  <li data-user-id="{{ u.id }}"><a href="/ui/users/{{ u.id }}">{{ u.id }} - {{ u.name }}</a> ({{ u.email or 'no email' }}) <button class="delete-user" data-id="{{ u.id }}">Delete</button></li>
       {% else %}
         <li>No users</li>
       {% endfor %}
@@ -96,9 +131,9 @@
 
   <div class="card">
     <h3 class="small">Orders</h3>
-    <ul class="orders-list">
+      <ul class="orders-list">
       {% for o in orders %}
-        <li>#{{ o.id }} user {{ o.user_id }}: {{ o.amount }}</li>
+        <li data-order-id="{{ o.id }}">#{{ o.id }} user {{ o.user_id }}: {{ o.amount }} <button class="delete-order" data-id="{{ o.id }}">Delete</button></li>
       {% else %}
         <li>No orders</li>
       {% endfor %}

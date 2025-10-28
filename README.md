@@ -164,6 +164,16 @@ curl 'http://localhost:8000/search_vuln?q=%27%20OR%20%271%27%3D%271'
 
 - In VULNERABLE mode the raw SQL path may return more rows (demonstrating SQL injection). Toggle back to SAFE and verify the injection payload no longer returns rows.
 
+### Responsible security testing (safe, educational use only)
+
+- This project intentionally includes a toggleable "vulnerable" mode to demonstrate how unsafe patterns behave and how tests can detect them. Only perform vulnerability experiments in a local, isolated environment. Do NOT run attack traffic against servers you don't own or systems in production.
+- The recommended way to study vulnerabilities in this app is:
+	1. Run the app locally and enable vulnerable mode using the UI or the `/vulnerable` endpoint.
+	2. Use the provided automated tests (`pytest`) which include cases that demonstrate injection and FK differences. Reading the test code shows safe examples of how the app behaves under attack-like inputs.
+	3. To exercise the safe-mode protections via the UI, use the search box on `/ui` — the app will block obvious malicious-looking inputs in SAFE mode and display a small toast message saying the input is invalid. This is intentionally conservative and for education.
+
+Note: I intentionally do not provide step-by-step exploit payloads or instructions here. If you need to perform controlled security research, follow responsible disclosure practices and use the app's vulnerable mode in an isolated environment.
+
 4) Foreign key violation behavior difference
 
 - In SAFE mode, the app performs a defensive check and returns a friendly 400 with "foreign key violation" when you try to create an order for a missing user.

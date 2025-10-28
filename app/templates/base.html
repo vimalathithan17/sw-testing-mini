@@ -18,5 +18,74 @@
       {% block content %}{% endblock %}
     </div>
   </main>
+  <!-- Toast container. Per-page toast payload is written into the data-toast attribute as JSON. -->
+  <div id="toast-container" data-toast='{{ (toast|default(None))|tojson|safe }}' aria-live="polite" style="position:fixed;right:1rem;bottom:1rem;z-index:9999"></div>
+  <script>
+    // Toast manager: supports showToast(message|object) where object = {message, type, duration}
+    function createToastElement(msg, type){
+      const el = document.createElement('div');
+      el.classList.add('toast', `toast--${type || 'info'}`);
+      const inner = document.createElement('div');
+      inner.className = 'toast-message';
+      inner.textContent = msg;
+      const btn = document.createElement('button');
+      btn.className = 'toast-close';
+      btn.setAttribute('aria-label','dismiss');
+      btn.innerHTML = '&times;';
+      btn.addEventListener('click', ()=>{ hideToast(el); });
+      el.appendChild(inner);
+      el.appendChild(btn);
+      return el;
+    }
+
+    function hideToast(el){
+      if(!el) return;
+      el.classList.remove('toast-in');
+      el.classList.add('toast-out');
+      el.addEventListener('animationend', ()=> el.remove(), { once: true });
+    }
+
+    function showToast(payload){
+      // payload may be string or object
+      let msg=''; let type='info'; let duration=4000;
+      if(typeof payload === 'string') msg = payload;
+      else if (payload && typeof payload === 'object'){
+        msg = payload.message || JSON.stringify(payload);
+        type = payload.type || 'info';
+        duration = (typeof payload.duration === 'number') ? payload.duration : duration;
+      } else return;
+
+      const container = document.getElementById('toast-container');
+      const el = createToastElement(msg, type);
+      container.appendChild(el);
+      // start in animation
+      requestAnimationFrame(()=> el.classList.add('toast-in'));
+
+      // pause timer on hover
+      let timeoutId = setTimeout(()=> hideToast(el), duration);
+      el.addEventListener('mouseenter', ()=> clearTimeout(timeoutId));
+      el.addEventListener('mouseleave', ()=> { timeoutId = setTimeout(()=> hideToast(el), Math.max(800, duration/3)); });
+    }
+
+    // On load, parse JSON from the data-toast attribute instead of relying on
+    // inline template JS (this avoids editor JS parsing errors when templates
+    // contain Jinja expressions).
+    window.addEventListener('load', function(){
+      try {
+        const container = document.getElementById('toast-container');
+        const raw = container && container.getAttribute('data-toast');
+        let payload = null;
+        if (raw && raw !== 'null') {
+          payload = JSON.parse(raw);
+        }
+        if (payload) {
+          showToast(payload);
+        }
+      } catch (e) {
+        // don't crash the page for malformed JSON
+        console.warn('Failed to parse toast payload', e);
+      }
+    });
+  </script>
 </body>
 </html>

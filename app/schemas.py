@@ -14,6 +14,10 @@ class UserRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class UserDetail(UserRead):
+    orders: list["OrderRead"] = []
+
 class OrderCreate(BaseModel):
     user_id: PositiveInt
     amount: Decimal = Field(..., gt=Decimal("-0.01"))
@@ -31,3 +35,7 @@ class OrderRead(BaseModel):
     amount: Decimal
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# finalize forward refs
+UserDetail.model_rebuild()

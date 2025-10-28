@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card" style="max-width:720px;margin:1rem auto">
+  <h2>{{ user.name }} <span class="small muted">(id: {{ user.id }})</span></h2>
+  <p class="small">Email: <span id="user-email"></span>{{ user.email or 'no email' }}</span></p>
+  <p class="small">Name: <span id="user-name">{{ user.name }}</span></p>
+  <div style="margin-top:0.5rem">
+    <button id="edit-user">Edit user</button>
+    <button id="save-user" style="display:none">Save</button>
+    <button id="cancel-edit" style="display:none">Cancel</button>
+  </div>
+  <div id="edit-form" style="display:none;margin-top:0.5rem">
+    <input id="edit-name" placeholder="Name">
+    <input id="edit-email" placeholder="Email">
+  </div>
+
+  <h3 class="small">Orders</h3>
+  <ul class="orders-list">
+    {% for o in user.orders %}
+      <li data-order-id="{{ o.id }}">#{{ o.id }} amount {{ o.amount }} <button class="delete-order" data-id="{{ o.id }}">Delete</button></li>
+    {% else %}
+      <li>No orders</li>
+    {% endfor %}
+  </ul>
+
+  <h3 class="small">Create Order for {{ user.name }}</h3>
+  <form method="post" action="/ui/users/{{ user.id }}/orders">
+    <input type="hidden" name="user_id" value="{{ user.id }}">
+    <input name="amount" type="number" step="0.01" placeholder="Amount" required>
+    <button type="submit">Create</button>
+  </form>
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+
+  <p style="margin-top:1rem"><a href="/ui">← Back to home</a></p>
+
+  <script>
+    // reuse delete logic from index page (simple copy)
+    async function deleteEntity(path, id) {
+      if (!confirm('Are you sure you want to delete #' + id + '?')) return false;
+      const res = await fetch(path, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert('Failed to delete: ' + (j.detail || res.statusText));
+        return false;
+      }
+      return true;
+    }
+
+    document.addEventListener('click', async function (e) {
+      if (e.target.matches('.delete-order')) {
+        const id = e.target.dataset.id;
+        const ok = await deleteEntity('/orders/' + id, id);
+        if (ok) {
+          const li = document.querySelector('[data-order-id="' + id + '"]');
+          if (li) li.remove();
+        }
+      }
+    });
+  </script>
+  <script>
+    // Inline edit handlers
+    const editBtn = document.getElementById('edit-user');
+    const saveBtn = document.getElementById('save-user');
+    const cancelBtn = document.getElementById('cancel-edit');
+    const editForm = document.getElementById('edit-form');
+    const nameSpan = document.getElementById('user-name');
+    const emailSpan = document.getElementById('user-email');
+    const editName = document.getElementById('edit-name');
+    const editEmail = document.getElementById('edit-email');
+
+    editBtn.addEventListener('click', function(){
+      editForm.style.display = '';
+      editBtn.style.display = 'none';
+      saveBtn.style.display = '';
+      cancelBtn.style.display = '';
+      editName.value = nameSpan.textContent.trim();
+      editEmail.value = emailSpan.textContent.trim() === 'no email' ? '' : emailSpan.textContent.trim();
+    });
+
+    cancelBtn.addEventListener('click', function(){
+      editForm.style.display = 'none';
+      editBtn.style.display = '';
+      saveBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+    });
+
+    saveBtn.addEventListener('click', async function(){
+      const payload = { name: editName.value, email: editEmail.value };
+      const res = await fetch('/users/{{ user.id }}', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) {
+        const j = await res.json().catch(()=>({}));
+        alert('Failed to update: ' + (j.detail || res.statusText));
+        return;
+      }
+      const data = await res.json();
+      nameSpan.textContent = data.name;
+      emailSpan.textContent = data.email || 'no email';
+      // hide
+      editForm.style.display = 'none';
+      editBtn.style.display = '';
+      saveBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+    });
+  </script>
+  {# toast is handled in base.html via the toast-container data-toast attribute #}
+</div>
+{% endblock %}

@@ -7,6 +7,7 @@ from typing import List
 from .db import Base, engine, SessionLocal
 from . import crud, models, schemas
 from . import config
+from .utils import sanitize_input
 from sqlalchemy import text
 import os
 
@@ -90,6 +91,73 @@ async def search_users_vuln(q: str = Query("", min_length=0, max_length=200), db
         return db.query(models.User).filter(models.User.name == q).all()
 
 
+@app.get("/users/{user_id}", response_model=schemas.UserDetail)
+async def get_user(user_id: int, db: Session = Depends(get_db)):
+    user = crud.get_user_with_orders(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="user not found")
+    # ensure orders are loaded
+    return user
+
+
+@app.delete("/orders/{order_id}")
+async def api_delete_order(order_id: int, db: Session = Depends(get_db)):
+    ok = crud.delete_order(db, order_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="order not found")
+    return {"deleted": order_id}
+
+
+@app.delete("/users/{user_id}")
+async def api_delete_user(user_id: int, db: Session = Depends(get_db)):
+    ok = crud.delete_user(db, user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="user not found")
+    return {"deleted": user_id}
+
+
+@app.put("/users/{user_id}")
+async def api_update_user(user_id: int, payload: dict, db: Session = Depends(get_db)):
+    # Accept raw dict to keep things simple for this small app
+    name = payload.get("name")
+    email = payload.get("email")
+    updated = crud.update_user(db, user_id, name=name, email=email)
+    if not updated:
+        raise HTTPException(status_code=404, detail="user not found")
+    return updated
+
+
+@app.get("/ui/users/{user_id}", response_class=HTMLResponse)
+async def ui_user_detail(request: Request, user_id: int, db: Session = Depends(get_db)):
+    user = crud.get_user_with_orders(db, user_id)
+    if not user:
+        return templates.TemplateResponse(
+            "index.html",
+            {"request": request, "users": crud.list_users(db), "orders": crud.list_orders(db), "q": "", "search_results": None, "error": "user not found", "vulnerable": config.is_vulnerable()},
+            status_code=404,
+        )
+    return templates.TemplateResponse(
+        "user_detail.html",
+        {"request": request, "user": user, "vulnerable": config.is_vulnerable()},
+    )
+
+
+@app.post("/ui/users/{user_id}/orders")
+async def ui_create_order_for_user(request: Request, user_id: int, amount: str = Form(...), db: Session = Depends(get_db)):
+    # Create order then redirect back to user detail
+    try:
+        crud.create_order(db, schemas.OrderCreate(user_id=user_id, amount=amount))
+        return RedirectResponse(url=f"/ui/users/{user_id}", status_code=303)
+    except ValueError as e:
+        users = crud.list_users(db)
+        orders = crud.list_orders(db)
+        return templates.TemplateResponse(
+            "user_detail.html",
+            {"request": request, "user": crud.get_user_with_orders(db, user_id), "error": str(e), "vulnerable": config.is_vulnerable()},
+            status_code=400,
+        )
+
+
 @app.get("/vulnerable")
 async def get_vulnerable():
     return {"vulnerable": config.is_vulnerable()}
@@ -140,8 +208,14 @@ async def ui_index(request: Request, q: str = "", db: Session = Depends(get_db))
     users = crud.list_users(db)
     orders = crud.list_orders(db)
     search_results = None
+    toast = None
     if q:
-        search_results = db.query(models.User).filter(models.User.name.like(f"%{q}%")).all()
+        sanitized_q = sanitize_input(q)
+        toast = None
+        if not config.is_vulnerable() and sanitized_q != (q or ""):
+            # Input was cleaned in safe mode — inform the user and use the sanitized value
+            toast = "Invalid input detected — input has been sanitized for safety."
+        search_results = db.query(models.User).filter(models.User.name.like(f"%{sanitized_q}%")).all()
     return templates.TemplateResponse(
         "index.html",
             {
@@ -151,6 +225,7 @@ async def ui_index(request: Request, q: str = "", db: Session = Depends(get_db))
                 "q": q,
                 "search_results": search_results,
                 "error": None,
+                "toast": toast,
                 "vulnerable": config.is_vulnerable(),
             },
     )
